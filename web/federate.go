@@ -74,6 +74,16 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	}
 	sort.Sort(byName(vector))
 
+	externalLabels := h.externalLabels.Clone()
+	if _, ok := externalLabels[model.InstanceLabel]; !ok {
+		externalLabels[model.InstanceLabel] = ""
+	}
+	externalLabelnames := make([]string, 0, len(externalLabels))
+	for ln := range externalLabels {
+		externalLabelnames = append(externalLabelnames, string(ln))
+	}
+	sort.Strings(externalLabelnames)
+
 	var (
 		lastMetricName model.LabelValue
 		protMetricFam  *dto.MetricFamily
@@ -127,7 +137,7 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 				Name:  proto.String(string(ln)),
 				Value: proto.String(string(lv)),
 			})
-			if _, ok := h.externalLabels[ln]; ok {
+			if _, ok := externalLabels[ln]; ok {
 				globalUsed[ln] = struct{}{}
 			}
 		}
@@ -136,10 +146,11 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		// Attach global labels if they do not exist yet.
-		for ln, lv := range h.externalLabels {
-			if _, ok := globalUsed[ln]; !ok {
+		for _, ln := range externalLabelnames {
+			lv := externalLabels[model.LabelName(ln)]
+			if _, ok := globalUsed[model.LabelName(ln)]; !ok {
 				protMetric.Label = append(protMetric.Label, &dto.LabelPair{
-					Name:  proto.String(string(ln)),
+					Name:  proto.String(ln),
 					Value: proto.String(string(lv)),
 				})
 			}
